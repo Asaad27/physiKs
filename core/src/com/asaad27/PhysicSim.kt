@@ -2,6 +2,7 @@ package com.asaad27
 
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
@@ -20,7 +21,7 @@ class PhysicSim : ApplicationAdapter() {
         private val INITIAL_VELOCITY_X = listOf(-4f, -3f, -2f, -1f, 0f, 1f, 2f, 3f, 4f, 5f, 6f, 7f)
         private val INITIAL_VELOCITY_Y = listOf(4f, 5f, 6f, 7f, 9f, 10f, 11f, 12f, 13f, 14f, 20f)
         private const val WORLD_GRAVITY = 0f
-        private const val BALL_DENSITY = 0.8f
+        private const val BALL_DENSITY = 2f
         private const val BALL_RESTITUTION = 1f
         private const val TIME_STEP = 0.8f / 60f
         private const val VELOCITY_ITERATIONS = 6
@@ -32,11 +33,13 @@ class PhysicSim : ApplicationAdapter() {
     private lateinit var balls: MutableList<Body>
     private lateinit var camera: OrthographicCamera
     private lateinit var shapeRenderer: ShapeRenderer
+    private lateinit var bounceSound: Sound
     private val ballCreationQueue = mutableListOf<Vector2>()
 
     override fun create() {
         initializeGraphics()
         initializePhysics()
+        bounceSound = Gdx.audio.newSound(Gdx.files.internal("mixkit-ball-bouncing-in-the-ground-2077.wav"))
     }
 
     private fun initializeGraphics() {
@@ -64,6 +67,7 @@ class PhysicSim : ApplicationAdapter() {
                     else -> return
                 } as? UserDataType.Ball ?: return
 
+                if (!ball.isInCollision) bounceSound.play()
                 if (ball.isInCollision || Random.nextInt(100) > RANDOM_CHANCE_THRESHOLD) return
 
                 ballCreationQueue.add(Vector2(0f, 0f))
