@@ -14,7 +14,7 @@ import kotlin.random.Random
 
 class PhysicSim : ApplicationAdapter() {
     companion object {
-        private const val BALL_RADIUS = 0.1f
+        private const val BALL_RADIUS = 0.2f
         private const val PIXELS_TO_METERS = 100f
         private const val CIRCLE_RADIUS = 6f
         private val INITIAL_VELOCITY_X = listOf(-4f, -3f, -2f, -1f, 0f, 1f, 2f, 3f, 4f)
@@ -22,7 +22,7 @@ class PhysicSim : ApplicationAdapter() {
         private const val WORLD_GRAVITY = -8f
         private const val BALL_DENSITY = 1.2f
         private const val BALL_RESTITUTION = 1f
-        private const val TIME_STEP = 1f/60f
+        private const val TIME_STEP = 1f / 60f
         private const val VELOCITY_ITERATIONS = 6
         private const val POSITION_ITERATIONS = 2
         private const val RANDOM_CHANCE_THRESHOLD = 20
@@ -41,7 +41,7 @@ class PhysicSim : ApplicationAdapter() {
 
     private fun initializeGraphics() {
         camera = OrthographicCamera(Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat()).apply {
-            position.set(0f, 0f, 0f)
+            position[0f, 0f] = 0f
         }
         shapeRenderer = ShapeRenderer()
     }
@@ -56,31 +56,39 @@ class PhysicSim : ApplicationAdapter() {
     private fun setupCollisionListener() {
         world.setContactListener(object : ContactListener {
             override fun beginContact(contact: Contact) {
-                val userDataTypeA = contact.fixtureA.userData as? UserDataType
-                val userDataTypeB = contact.fixtureB.userData as? UserDataType
-                if ((userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball)
-                    || (userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge)) {
-                    val ball = (if (userDataTypeA is UserDataType.Ball) userDataTypeA else userDataTypeB) as UserDataType.Ball
-                    if (ball.isInCollision || Random.nextInt(0, 100) > RANDOM_CHANCE_THRESHOLD) {
-                        return
-                    }
-                    ballCreationQueue.add(Vector2(0f, 0f))
-                    ball.isInCollision = true
-                }
+                val (userDataTypeA, userDataTypeB) = Pair(contact.fixtureA.userData, contact.fixtureB.userData)
+
+                val ball = when {
+                    userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge -> userDataTypeA
+                    userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball -> userDataTypeB
+                    else -> return
+                } as? UserDataType.Ball ?: return
+
+                if (ball.isInCollision || Random.nextInt(100) > RANDOM_CHANCE_THRESHOLD) return
+
+                ballCreationQueue.add(Vector2(0f, 0f))
+                ball.isInCollision = true
             }
 
             override fun endContact(contact: Contact?) {
-                val userDataTypeA = contact?.fixtureA?.userData as? UserDataType
-                val userDataTypeB = contact?.fixtureB?.userData as? UserDataType
-                if ((userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball)
-                    || (userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge)) {
-                    (if (userDataTypeA is UserDataType.Ball) userDataTypeA else userDataTypeB as? UserDataType.Ball)?.isInCollision = false
+                contact ?: return
+                val (userDataTypeA, userDataTypeB) = Pair(contact.fixtureA.userData, contact.fixtureB.userData)
+                val isBallAndCircleEdgeCollision =
+                    (userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball) ||
+                            (userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge)
+                if (isBallAndCircleEdgeCollision) {
+                    val ball = (userDataTypeA as? UserDataType.Ball) ?: (userDataTypeB as? UserDataType.Ball)
+                    ball?.isInCollision = false
                 }
             }
 
-            override fun preSolve(contact: Contact?, oldManifold: Manifold?) {}
+            override fun preSolve(contact: Contact?, oldManifold: Manifold?) {
+                /* no-op */
+            }
 
-            override fun postSolve(contact: Contact?, impulse: ContactImpulse?) {}
+            override fun postSolve(contact: Contact?, impulse: ContactImpulse?) {
+                /* no-op */
+            }
         })
     }
 
@@ -185,6 +193,6 @@ sealed class UserDataType {
     data class Ball(
         val color: Color,
         val radius: Float,
-        var isInCollision : Boolean = false
+        var isInCollision: Boolean = false
     ) : UserDataType()
 }
