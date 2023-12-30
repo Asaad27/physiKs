@@ -10,18 +10,26 @@ import com.badlogic.gdx.physics.box2d.*
 import com.badlogic.gdx.utils.ScreenUtils
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
 
 class PhysicSim : ApplicationAdapter() {
     companion object {
-        private const val BALL_RADIUS = 0.5f
+        private const val BALL_RADIUS = 0.1f
         private const val PIXELS_TO_METERS = 100f
-        private const val CIRCLE_RADIUS = 5f
-        private val INITIAL_VELOCITY = Vector2(0f, 10f)
+        private const val CIRCLE_RADIUS = 6f
+        private val INITIAL_VELOCITY_X = listOf(-4f, -3f, -2f, -1f, 0f, 1f, 2f, 3f, 4f)
+        private val INITIAL_VELOCITY_Y = listOf(-0f, 4f, 5f, 6f, 7f)
+        private const val WORLD_GRAVITY = -8f
+        private const val BALL_DENSITY = 1.2f
+        private const val BALL_RESTITUTION = 1f
+        private const val TIME_STEP = 1f/60f
+        private const val VELOCITY_ITERATIONS = 6
+        private const val POSITION_ITERATIONS = 2
+        private const val RANDOM_CHANCE_THRESHOLD = 20
     }
 
     private lateinit var world: World
     private lateinit var balls: MutableList<Body>
-    private lateinit var debugRenderer: Box2DDebugRenderer
     private lateinit var camera: OrthographicCamera
     private lateinit var shapeRenderer: ShapeRenderer
     private val ballCreationQueue = mutableListOf<Vector2>()
@@ -32,16 +40,15 @@ class PhysicSim : ApplicationAdapter() {
     }
 
     private fun initializeGraphics() {
-        debugRenderer = Box2DDebugRenderer()
-        camera = OrthographicCamera(Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
-        camera.position[0f, 0f] = 0f
+        camera = OrthographicCamera(Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat()).apply {
+            position.set(0f, 0f, 0f)
+        }
         shapeRenderer = ShapeRenderer()
     }
 
     private fun initializePhysics() {
-        world = World(Vector2(0f, -10f), true)
-        balls = mutableListOf()
-        balls.add(createBall(Vector2(0f, 0f)))
+        world = World(Vector2(0f, WORLD_GRAVITY), true)
+        balls = mutableListOf(createBall(Vector2(0f, 0f)))
         createCircleBody()
         setupCollisionListener()
     }
@@ -49,32 +56,31 @@ class PhysicSim : ApplicationAdapter() {
     private fun setupCollisionListener() {
         world.setContactListener(object : ContactListener {
             override fun beginContact(contact: Contact) {
-                val fixtureA = contact.fixtureA
-                val fixtureB = contact.fixtureB
-                if ((fixtureA.userData is HashMap<*, *> && fixtureB.userData == "circleEdge") ||
-                    (fixtureA.userData == "circleEdge" && fixtureB.userData is HashMap<*, *>)) {
-
-                    val ballFixture = if (fixtureA.userData is HashMap<*, *>) fixtureA else fixtureB
-                    val ballData = ballFixture.userData as HashMap<String, Any>
-
-                    if (ballData["type"] == "ball" && ballData["spawned"] == false) {
-                        ballCreationQueue.add(Vector2(0f, 0f))
-                        ballData["spawned"] = true
+                val userDataTypeA = contact.fixtureA.userData as? UserDataType
+                val userDataTypeB = contact.fixtureB.userData as? UserDataType
+                if ((userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball)
+                    || (userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge)) {
+                    val ball = (if (userDataTypeA is UserDataType.Ball) userDataTypeA else userDataTypeB) as UserDataType.Ball
+                    if (ball.isInCollision || Random.nextInt(0, 100) > RANDOM_CHANCE_THRESHOLD) {
+                        return
                     }
+                    ballCreationQueue.add(Vector2(0f, 0f))
+                    ball.isInCollision = true
                 }
             }
 
             override fun endContact(contact: Contact?) {
-
+                val userDataTypeA = contact?.fixtureA?.userData as? UserDataType
+                val userDataTypeB = contact?.fixtureB?.userData as? UserDataType
+                if ((userDataTypeA is UserDataType.CircleEdge && userDataTypeB is UserDataType.Ball)
+                    || (userDataTypeA is UserDataType.Ball && userDataTypeB is UserDataType.CircleEdge)) {
+                    (if (userDataTypeA is UserDataType.Ball) userDataTypeA else userDataTypeB as? UserDataType.Ball)?.isInCollision = false
+                }
             }
 
-            override fun preSolve(contact: Contact?, oldManifold: Manifold?) {
+            override fun preSolve(contact: Contact?, oldManifold: Manifold?) {}
 
-            }
-
-            override fun postSolve(contact: Contact?, impulse: ContactImpulse?) {
-
-            }
+            override fun postSolve(contact: Contact?, impulse: ContactImpulse?) {}
         })
     }
 
@@ -82,7 +88,6 @@ class PhysicSim : ApplicationAdapter() {
         clearScreen()
         stepWorld()
         processBallCreationQueue()
-        renderPhysics()
         renderGraphics()
     }
 
@@ -91,7 +96,7 @@ class PhysicSim : ApplicationAdapter() {
     }
 
     private fun stepWorld() {
-        world.step(Gdx.graphics.deltaTime, 6, 2)
+        world.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS)
     }
 
     private fun processBallCreationQueue() {
@@ -99,11 +104,6 @@ class PhysicSim : ApplicationAdapter() {
             balls.add(createBall(position))
         }
         ballCreationQueue.clear()
-    }
-
-    private fun renderPhysics() {
-        camera.update()
-        debugRenderer.render(world, camera.combined)
     }
 
     private fun renderGraphics() {
@@ -115,23 +115,17 @@ class PhysicSim : ApplicationAdapter() {
         shapeRenderer.projectionMatrix = camera.combined
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
         shapeRenderer.color = Color.WHITE
-        shapeRenderer.circle(0f, 0f, CIRCLE_RADIUS * PIXELS_TO_METERS, 1024)
+        shapeRenderer.circle(0f, 0f, CIRCLE_RADIUS * PIXELS_TO_METERS, 360)
         shapeRenderer.end()
     }
 
     private fun drawBalls() {
         shapeRenderer.projectionMatrix = camera.combined
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        shapeRenderer.color = Color.WHITE
         balls.forEach { ball ->
-            val color = Color(
-                Math.random().toFloat(),
-                Math.random().toFloat(),
-                Math.random().toFloat(),
-                1f
-            )
+            val ballUserData = ball.userData as? UserDataType.Ball
+            val color = ballUserData?.color ?: Color.WHITE
             shapeRenderer.color = color
-
             shapeRenderer.circle(
                 ball.position.x * PIXELS_TO_METERS,
                 ball.position.y * PIXELS_TO_METERS,
@@ -152,32 +146,45 @@ class PhysicSim : ApplicationAdapter() {
         }
         val fixtureDef = FixtureDef().apply {
             shape = circleShape
-            density = 2.0f
-            restitution = 1.0f
+            density = BALL_DENSITY
+            restitution = BALL_RESTITUTION
         }
-        body.createFixture(fixtureDef).userData = hashMapOf("type" to "ball", "spawned" to false)
+        val randomColor = Color(
+            Math.random().toFloat(),
+            Math.random().toFloat(),
+            Math.random().toFloat(),
+            1f
+        )
+        body.createFixture(fixtureDef).userData = UserDataType.Ball(randomColor, BALL_RADIUS)
         circleShape.dispose()
-        body.linearVelocity = INITIAL_VELOCITY
-        return body
+        body.linearVelocity = Vector2(INITIAL_VELOCITY_X.random(), INITIAL_VELOCITY_Y.random())
+        return body.apply { userData = UserDataType.Ball(randomColor, BALL_RADIUS) }
     }
 
     private fun createCircleBody() {
         val bodyDef = BodyDef().apply { type = BodyDef.BodyType.StaticBody }
         val body = world.createBody(bodyDef)
-
         val chainShape = ChainShape()
         val vertices = Array(36) { i ->
             val angle = 2 * Math.PI * i / 36
             Vector2(CIRCLE_RADIUS * cos(angle).toFloat(), CIRCLE_RADIUS * sin(angle).toFloat())
         }
         chainShape.createLoop(vertices)
-        body.createFixture(chainShape, 0f).userData = "circleEdge"
+        body.createFixture(chainShape, 0f).userData = UserDataType.CircleEdge
         chainShape.dispose()
     }
 
     override fun dispose() {
         world.dispose()
-        debugRenderer.dispose()
         shapeRenderer.dispose()
     }
+}
+
+sealed class UserDataType {
+    data object CircleEdge : UserDataType()
+    data class Ball(
+        val color: Color,
+        val radius: Float,
+        var isInCollision : Boolean = false
+    ) : UserDataType()
 }
