@@ -17,12 +17,12 @@ class PhysicSim : ApplicationAdapter() {
         private const val BALL_RADIUS = 0.2f
         private const val PIXELS_TO_METERS = 100f
         private const val CIRCLE_RADIUS = 6f
-        private val INITIAL_VELOCITY_X = listOf(-4f, -3f, -2f, -1f, 0f, 1f, 2f, 3f, 4f)
-        private val INITIAL_VELOCITY_Y = listOf(-0f, 4f, 5f, 6f, 7f)
-        private const val WORLD_GRAVITY = -8f
-        private const val BALL_DENSITY = 1.2f
+        private val INITIAL_VELOCITY_X = listOf(-4f, -3f, -2f, -1f, 0f, 1f, 2f, 3f, 4f, 5f, 6f, 7f)
+        private val INITIAL_VELOCITY_Y = listOf(4f, 5f, 6f, 7f, 9f, 10f, 11f, 12f, 13f, 14f, 20f)
+        private const val WORLD_GRAVITY = 0f
+        private const val BALL_DENSITY = 0.8f
         private const val BALL_RESTITUTION = 1f
-        private const val TIME_STEP = 1f / 60f
+        private const val TIME_STEP = 0.8f / 60f
         private const val VELOCITY_ITERATIONS = 6
         private const val POSITION_ITERATIONS = 2
         private const val RANDOM_CHANCE_THRESHOLD = 20
